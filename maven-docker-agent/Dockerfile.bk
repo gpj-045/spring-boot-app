@@ -1,0 +1,28 @@
+FROM maven:3.9.4-eclipse-temurin-11
+
+USER root
+
+# Install Docker CLI and SSH tools
+RUN apt-get update && apt-get install -y \
+    docker.io \
+    openssh-client \
+    && rm -rf /var/lib/apt/lists/*
+
+# Add GitHub SSH keys (both endpoints for reliability)
+RUN mkdir -p /root/.ssh && \
+    ssh-keyscan -H github.com >> /root/.ssh/known_hosts && \
+    ssh-keyscan -H ssh.github.com >> /root/.ssh/known_hosts && \
+    chmod 600 /root/.ssh/known_hosts
+
+# Create jenkins user (docker group will be handled at runtime)
+RUN useradd -u 1000 -m jenkins
+
+# Copy SSH keys to jenkins user
+RUN mkdir -p /home/jenkins/.ssh && \
+    cp /root/.ssh/known_hosts /home/jenkins/.ssh/ && \
+    chown -R jenkins:jenkins /home/jenkins/.ssh && \
+    chmod 700 /home/jenkins/.ssh
+
+USER jenkins
+WORKDIR /home/jenkins
+
