@@ -1,5 +1,5 @@
-# Use OpenJDK 11 slim image for smaller size
-FROM openjdk:11-jdk-slim
+# Use OpenJDK 17 slim image for smaller size
+FROM openjdk:17-jdk-slim
 
 # Switch to root for installation
 USER root
@@ -40,28 +40,21 @@ RUN git config --system user.name "Jenkins Agent" && \
     git config --system init.defaultBranch main && \
     git config --system pull.rebase false
 
-# Add GitHub SSH keys
-RUN mkdir -p /etc/ssh && \
-    ssh-keyscan -H github.com >> /etc/ssh/ssh_known_hosts && \
-    ssh-keyscan -H ssh.github.com >> /etc/ssh/ssh_known_hosts && \
-    chmod 644 /etc/ssh/ssh_known_hosts
+# Add GitHub SSH keys (include all key types - RSA, ECDSA, ED25519)
+RUN mkdir -p ~/.ssh && \
+    chmod 700 ~/.ssh && \
+    ssh-keyscan  -t rsa,ecdsa,ed25519 github.com >>  ~/.ssh/known_hosts && \
+    ssh-keyscan  -t rsa,ecdsa,ed25519 ssh.github.com >>  ~/.ssh/known_hosts && \
+    chmod 644 ~/.ssh/known_hosts
 
 # Create jenkins user with docker group
-#RUN useradd -u 980 -g 977 -m jenkins && \
-#RUN groupmod -g 977 jenkins && usermod -u 980 -g 977 jenkins && \
-#   groupadd -g 978 docker || true && \
-#    usermod -aG docker jenkins
-
-RUN groupadd -g 977 jenkins && \
-    groupadd -g 978 docker && \
-    useradd -u 980 -g 977 -m jenkins && \
+RUN useradd -u 111 -m jenkins && \
+    groupadd -g 988 docker || true && \
     usermod -aG docker jenkins
-#    chown -R 980:977 /home/jenkins
-
 
 # Setup SSH for jenkins user
 RUN mkdir -p /home/jenkins/.ssh && \
-    cp /etc/ssh/ssh_known_hosts /home/jenkins/.ssh/known_hosts && \
+    cp ~/.ssh/known_hosts /home/jenkins/.ssh/known_hosts && \
     chown -R jenkins:jenkins /home/jenkins/.ssh && \
     chmod 700 /home/jenkins/.ssh && \
     chmod 600 /home/jenkins/.ssh/known_hosts
@@ -70,17 +63,26 @@ RUN mkdir -p /home/jenkins/.ssh && \
 RUN mkdir -p /home/jenkins/.m2 && \
     chown -R jenkins:jenkins /home/jenkins/.m2
 
+# Create Docker config directory for jenkins user
+RUN mkdir -p /home/jenkins/.docker && \
+    chown -R jenkins:jenkins /home/jenkins/.docker && \
+    chmod 755 /home/jenkins/.docker
+
+# Set HOME environment variable to ensure Docker uses correct config path
+ENV HOME=/home/jenkins
+ENV DOCKER_CONFIG=/home/jenkins/.docker
+
 # Verify installations
 RUN java -version && mvn -version && git --version && docker --version
 
 # Add metadata
 LABEL maintainer="gpj-045" \
       description="Java-based Jenkins Agent with Maven, Docker, Git" \
-      java.version="11" \
+      java.version="17" \
       maven.version="3.9.4" \
-      base="openjdk:11-jdk-slim"
+      base="openjdk:17-jdk-slim"
 
 # Default entrypoint (Jenkins-compatible)
 USER jenkins
 CMD ["/bin/bash"]
-WORKDIR /home/jenkins
+
